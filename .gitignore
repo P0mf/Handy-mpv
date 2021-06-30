@@ -1,0 +1,8 @@
+server_time.json
+mpvsocket
+.vscode
+**.funscript
+**.mp4
+handy_mpv.py
+venv/
+script_2x.py
