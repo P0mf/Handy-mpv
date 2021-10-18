@@ -13,7 +13,7 @@ from datetime import datetime
 import mpv
 import requests
 
-API_SECRET="YOUR KEY HERE"
+API_SECRET="YOUR CONNECTION KEY"
 API_ENDPOINT="https://www.handyfeeling.com/api/v1/"
 
 TIMEOUT = 10 * 1000 # 10 seconds
@@ -121,8 +121,6 @@ def upload_script(script, double=False):
     data = json.loads(r.text)
     payload = {
         "url": data['url'],
-        "filename": data['filename'],
-        "data": data['size'],
         "timeout": TIMEOUT
     }
     r = requests.get(f'{API_ENDPOINT}{API_SECRET}/syncPrepare', params=payload)
@@ -140,6 +138,7 @@ if not data['success']:
 print('Handy connected, Uploading script!')
 
 args = parser.parse_args()
+print(args)
 script = find_script(args.file)
 if args.double:
     upload_script(script_2x(script), True)
@@ -158,12 +157,12 @@ else :
 
 player = mpv.MPV(input_default_bindings=True, input_vo_keyboard=True, osc=True)
 player.play(args.file)
-font = ImageFont.truetype('DejaVuSans.ttf', 40)
+# font = ImageFont.truetype('DejaVuSans.ttf', 40)
 
 
-overlay = player.create_image_overlay()
-img = Image.new('RGBA', (400, 150),  (255, 255, 255, 0))
-d = ImageDraw.Draw(img)
+# overlay = player.create_image_overlay()
+# img = Image.new('RGBA', (400, 150),  (255, 255, 255, 0))
+# d = ImageDraw.Draw(img)
 
 sync = 0
 
@@ -176,30 +175,34 @@ def sync_play(time=0, play='true'):
     r = requests.get(f'{API_ENDPOINT}{API_SECRET}/syncPlay', params=payload)
     print(r.text)
 
-@player.on_key_press('up')
-def my_up_binding():
+# @player.on_key_press('up')
+def my_up_binding(key_state, key_name, key_char):
     value = player._get_property('playback-time')
     time_ms = int(value * 1000)
     print(time_ms)
     sync_play(time_ms, 'false')
 
-@player.on_key_press('q')
-def my_q_binding():
+# @player.on_key_press('q')
+def my_q_binding(key_state, key_name, key_char):
     global player
     sync_play(0, 'false')
-    player.quit()
+    player.command("quit")
     del player
     os._exit(-1)
 
-
-@player.on_key_press('down')
-def my_down_binding():
+# @player.on_key_press('down')
+def my_down_binding(key_state, key_name, key_char):
     value = player._get_property('playback-time')
     time_ms = int(value * 1000)
     print(time_ms)
     sync_play(time_ms, 'true')
 
-@player.event_callback('playback-restart')
+
+player.register_key_binding("up", my_up_binding)
+player.register_key_binding("q", my_q_binding)
+player.register_key_binding("down", my_down_binding)
+
+# @player.event_callback('playback-restart')
 def file_restart(event):
     value = player._get_property('playback-time')
     time_ms = int(value * 1000)
@@ -207,21 +210,36 @@ def file_restart(event):
     sync_play(time_ms)
     print(f'Now playing at {time_ms}s')
 
-@player.event_callback('shutdown')
+# @player.event_callback('shutdown')
 def callback_shutdown(event):
     sync_play(0, 'false')
-    player.quit()
+    player.command("quit")
     sys.exit()
 
-@player.event_callback('pause')
+#@player.event_callback('pause')
 def video_pause(event):
     sync_play(0, 'false')
 
-@player.event_callback('unpause')
+#@player.event_callback('unpause')
 def video_unpause(event):
     value = player._get_property('playback-time')
     time_ms = int(value * 1000)
     sync_play(time_ms, 'true')
+
+
+def on_event(event):
+    e = event.as_dict(decoder=mpv.lazy_decoder)["event"]
+    match e:
+        case "playback-restart":
+            file_restart(event)
+        case "shutdown":
+            callback_shutdown(event)
+        case "pause":
+            video_pause(event)
+        case "unpause":
+            video_unpause(event)
+
+player.register_event_callback(on_event)
 
 
 try:
