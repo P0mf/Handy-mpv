@@ -21,12 +21,13 @@ all other mpv shortcuts should work as inteded.
 2. create a virtualenv `python -m venv venv`
 3. activate venv `. venv/bin/activate`
 4. install dependencies `pip install -r requirements.txt`
-5. Setup your handy key in the `app.py` file.
+5. copy `config.py.example` to `config.py`, `cp config.py.example config.py`
+6. Setup your handy key in the `config.py` file.
 ```python
 # ...
 
 API_SECRET="YOUR KEY HERE"
-API_ENDPOINT="https://www.handyfeeling.com/api/v1/"
+TIME_SYNC_FILE="/tmp/server_time.json"
 
 #...
 ```
