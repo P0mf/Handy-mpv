@@ -6,6 +6,7 @@ from time import sleep, time_ns
 import argparse
 import json
 import os
+from os.path import exists
 import io
 import sys
 from datetime import datetime
@@ -13,8 +14,10 @@ from datetime import datetime
 import mpv
 import requests
 
-API_SECRET="YOUR CONNECTION KEY"
-API_ENDPOINT="https://www.handyfeeling.com/api/v1/"
+import config
+
+API_SECRET=config.API_SECRET
+API_ENDPOINT="https://www.handyfeeling.com/api/handy/v2/"
 
 TIMEOUT = 10 * 1000 # 10 seconds
 
@@ -22,6 +25,11 @@ time_sync_initial_offset = 0
 time_sync_aggregate_offset = 0
 time_sync_average_offset = 0
 time_syncs = 0
+
+
+HEADERS = {
+    'X-Connection-Key': API_SECRET
+}
 
 parser = argparse.ArgumentParser(description='Handy MPV sync Utility')
 parser.add_argument('file', metavar='file', type=str,
@@ -32,7 +40,10 @@ parser.add_argument("--double", action="store_true", help='enable 2x speed conve
 # did this. I'm just copying the JS code from the site.
 
 def save_server_time():
-    with open("/home/kiniamaro/Git/Python/handy_mpv/server_time.json", 'w') as f:
+    if not exists(config.TIME_SYNC_FILE):
+        fp = open(config.TIME_SYNC_FILE, 'x')
+        fp.close()
+    with open(config.TIME_SYNC_FILE, 'w') as f:
         json.dump({
             "last_saved": time_ns(),
             "time_sync_average_offset": time_sync_average_offset,
@@ -40,7 +51,11 @@ def save_server_time():
         }, f)
 
 def get_saved_time():
-    with open("/home/kiniamaro/Git/Python/handy_mpv/server_time.json", 'r') as f:
+    if not exists(config.TIME_SYNC_FILE):
+        fp = open(config.TIME_SYNC_FILE, 'w')
+        fp.write('{"last_saved": 0}')
+        fp.close()
+    with open(config.TIME_SYNC_FILE, 'r') as f:
         time = json.load(f)
         return time
 
@@ -53,7 +68,7 @@ def update_server_time():
             time_sync_average_offset, time_syncs
 
     send_time = int(time_ns() / 1000000) # don't ask
-    r = requests.get(f'{API_ENDPOINT}{API_SECRET}/getServerTime')
+    r = requests.get(f'{API_ENDPOINT}servertime', headers=HEADERS)
     data = json.loads(r.text)
     server_time = data['serverTime']
     print(server_time)
@@ -92,21 +107,21 @@ def script_2x(script_file):
 
     edited = []
     for action in script['actions']:
-        action['pos'] = 5
+        action['pos'] = 0
         edited.append(action)
 
     final = []
     for x in range(len(edited)):
         if edited[x]['pos'] == 95:
-            edited[x]['pos'] = 99
+            edited[x]['pos'] = 100
         final.append(edited[x])
 
         if x == len(edited) - 1:
             break
 
         new_pos = {}
-        new_pos['at'] = (edited[x + 1]['at'] + edited[x]['at']) / 2
-        new_pos['pos'] = 99
+        new_pos['at'] = int((edited[x + 1]['at'] + edited[x]['at']) / 2)
+        new_pos['pos'] = 100
         final.append(new_pos)
 
     script['actions'] = final
@@ -115,25 +130,25 @@ def script_2x(script_file):
 def upload_script(script, double=False):
 
     if not double:
-        r = requests.post("https://www.handyfeeling.com/api/sync/upload", files={'syncFile': open(script, 'rb')})
+        r = requests.post("https://tugbud.kaffesoft.com/cache", files={'file': open(script, 'rb')})
     else:
-        r = requests.post("https://www.handyfeeling.com/api/sync/upload", files={'syncFile': script})
+        r = requests.post("https://tugbud.kaffesoft.com/cache", files={'file': ('script.funscript', script[1])})
     data = json.loads(r.text)
-    payload = {
-        "url": data['url'],
-        "timeout": TIMEOUT
-    }
-    r = requests.get(f'{API_ENDPOINT}{API_SECRET}/syncPrepare', params=payload)
-    print(r.text)
+    print(data)
+    r = requests.put(f'{API_ENDPOINT}hssp/setup', json={'url': data['url']}, headers=HEADERS)
     data = json.loads(r.text)
 
 print('Getting Handy Status')
-r = requests.get(f'{API_ENDPOINT}{API_SECRET}/getStatus', params={'timeout': TIMEOUT})
+r = requests.get(f'{API_ENDPOINT}status', headers=HEADERS)
 data = json.loads(r.text)
 
-if not data['success']:
+if not data['mode']:
     print('Couldn\'t Sync with Handy, Exiting.')
     exit()
+
+if data['mode'] != 1:
+    r = requests.put(f'{API_ENDPOINT}/mode', json={"mode": 1}, headers=HEADERS)
+    print(r.text)
 
 print('Handy connected, Uploading script!')
 
@@ -168,11 +183,15 @@ sync = 0
 
 def sync_play(time=0, play='true'):
     payload = {
-        'play': play,
-        'serverTime': get_server_time(),
-        'time': time
+        'estimatedServerTime': get_server_time(),
+        'startTime': time
     }
-    r = requests.get(f'{API_ENDPOINT}{API_SECRET}/syncPlay', params=payload)
+
+    if play == 'false':
+        r = requests.put(f'{API_ENDPOINT}hssp/stop', headers=HEADERS)
+        return
+
+    r = requests.put(f'{API_ENDPOINT}hssp/play', json=payload, headers=HEADERS)
     print(r.text)
 
 # @player.on_key_press('up')

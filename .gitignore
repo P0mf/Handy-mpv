@@ -6,3 +6,6 @@ mpvsocket
 handy_mpv.py
 venv/
 script_2x.py
+config.py
+handy_mpv.sh
+__pycache__
