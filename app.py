@@ -239,6 +239,18 @@ def callback_shutdown(event):
 def video_pause(event):
     sync_play(0, 'false')
 
+def video_pause_unpause(property_name, new_value):
+    paused = new_value
+    if paused:
+        sync_play(0, 'false')
+    else:
+        value = player._get_property('playback-time')
+        if value is not None:
+            time_ms = int(value * 1000)
+            sync_play(time_ms, 'true')
+
+player.observe_property('pause', video_pause_unpause)
+
 #@player.event_callback('unpause')
 def video_unpause(event):
     value = player._get_property('playback-time')
@@ -253,10 +265,10 @@ def on_event(event):
             file_restart(event)
         case "shutdown":
             callback_shutdown(event)
-        case "pause":
-            video_pause(event)
-        case "unpause":
-            video_unpause(event)
+        # case "pause":
+        #     video_pause(event)
+        # case "unpause":
+        #     video_unpause(event)
 
 player.register_event_callback(on_event)
 
